@@ -1,4 +1,6 @@
-const web = require('neutrino-preset-web');
+const web = require('@neutrinojs/web');
+const compileLoader = require('@neutrinojs/compile-loader');
+const loaderMerge = require('@neutrinojs/loader-merge');
 const { join } = require('path');
 const merge = require('deepmerge');
 
@@ -7,18 +9,22 @@ const MODULES = join(__dirname, 'node_modules');
 module.exports = (neutrino, opts = {}) => {
   const options = merge({
     hot: true,
-    babel: {
-      presets: [require.resolve('babel-preset-preact')],
+    babel: {}
+  }, opts);
+
+  Object.assign(options, {
+    babel: compileLoader.merge({
       plugins: [
+        require.resolve('babel-plugin-transform-object-rest-spread'),
         [
           require.resolve('babel-plugin-transform-react-jsx'),
-          { pragma: 'Preact.h' }
+          { pragma: 'h' }
         ],
-        require.resolve('babel-plugin-transform-object-rest-spread'),
-        process.env.NODE_ENV !== 'development' ?
-          [require.resolve('babel-plugin-transform-class-properties'), { spec: true }] :
-          {}
+        ...(process.env.NODE_ENV !== 'development' ?
+          [[require.resolve('babel-plugin-transform-class-properties'), { spec: true }]] :
+          [])
       ],
+      presets: [require.resolve('babel-preset-preact')],
       env: {
         development: {
           plugins: [
@@ -27,10 +33,16 @@ module.exports = (neutrino, opts = {}) => {
           ]
         }
       }
-    }
-  }, opts);
+    }, options.babel)
+  });
 
   neutrino.use(web, options);
+
+  neutrino.config.when(neutrino.config.module.rules.has('lint'), () => {
+    neutrino.use(loaderMerge('lint', 'eslint'), {
+      plugins: ['react']
+    });
+  });
 
   neutrino.config
     .resolve
@@ -44,5 +56,5 @@ module.exports = (neutrino, opts = {}) => {
     .resolveLoader.modules.add(MODULES).end().end()
     .when(process.env.NODE_ENV === 'development', config => config
       .entry('index')
-      .prepend(require.resolve('webpack/hot/only-dev-server')));
+        .prepend(require.resolve('webpack/hot/only-dev-server')));
 };
